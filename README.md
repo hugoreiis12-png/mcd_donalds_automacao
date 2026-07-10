@@ -42,7 +42,7 @@ PG_PORT=5432
 PG_DBNAME=FABRICA
 PG_USER=postgres
 PG_PASSWORD=postgres
-PG_SCHEMA=mcd_donalds
+PG_SCHEMA=public
 BASE_DIR=./dados
 HEADLESS=true
 CANAL=console
@@ -225,9 +225,10 @@ A senha fica armazenada na configuracao da stack no Portainer, nunca no git.
 ### Schema no banco de destino
 
 O pipeline **nao cria** as tabelas. No destino `192.168.0.250/FABRICA` ambas
-ja existem: `public.mcd_reclamacao` (dados) e
-`mcd_donalds.pipeline_auditoria` (auditoria, criada via `sql/002`). Num
-banco novo (do zero), aplique os dois DDLs:
+ficam no schema `public`: `public.mcd_reclamacao` (dados) e
+`public.pipeline_auditoria` (auditoria, criada via `sql/002`). Por isso a
+producao usa `PG_SCHEMA=public` — um unico schema cobre dados e auditoria.
+Num banco novo (do zero), aplique os dois DDLs:
 
 ```bash
 psql -h <host> -U postgres -d FABRICA -f sql/001_mcd_reclamacao.sql

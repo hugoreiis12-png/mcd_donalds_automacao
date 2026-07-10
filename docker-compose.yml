@@ -11,7 +11,9 @@ services:
       - PG_PORT=5432
       - PG_DBNAME=FABRICA
       - PG_USER=postgres
-      - PG_SCHEMA=mcd_donalds
+      # Producao: dados e auditoria vivem em public (public.mcd_reclamacao +
+      # public.pipeline_auditoria). Um unico schema cobre os dois.
+      - PG_SCHEMA=public
       # Senha: definida como variavel de ambiente da STACK no Portainer
       # (nao vai para o git). Local dev le do .env automaticamente.
       - PG_PASSWORD=${PG_PASSWORD:?defina a variavel PG_PASSWORD na stack do Portainer}

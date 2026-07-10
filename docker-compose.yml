@@ -4,7 +4,7 @@ services:
     image: mcd-donalds:latest
     container_name: mcd-donalds
     environment:
-      # ── Fuso (o agendamento de segunda 07:00 segue este TZ) ──
+      # ── Fuso (o agendamento diario 08:00 segue este TZ) ──
       - TZ=America/Sao_Paulo
       # ── Banco (prefixo PG_) — SEM a senha aqui ──
       - PG_HOST=192.168.0.250
@@ -17,6 +17,10 @@ services:
       # Senha: definida como variavel de ambiente da STACK no Portainer
       # (nao vai para o git). Local dev le do .env automaticamente.
       - PG_PASSWORD=${PG_PASSWORD:?defina a variavel PG_PASSWORD na stack do Portainer}
+      # ── Credenciais do portal Martin Brower (necessarias para o login) ──
+      # Tambem definidas como variaveis da STACK no Portainer (fora do git).
+      - LOGIN_USER=${LOGIN_USER:?defina a variavel LOGIN_USER na stack do Portainer}
+      - LOGIN_PASSWORD=${LOGIN_PASSWORD:?defina a variavel LOGIN_PASSWORD na stack do Portainer}
       # ── Pipeline ──
       - BASE_DIR=/app/dados
       - HEADLESS=true

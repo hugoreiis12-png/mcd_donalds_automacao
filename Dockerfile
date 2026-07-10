@@ -1,5 +1,5 @@
 # ============================================================
-# mcd-donalds — imagem de execucao agendada (segunda 07:00 BRT)
+# mcd-donalds — imagem de execucao agendada (todo dia 08:00 BRT)
 # Base: Python 3.12 slim (Debian bookworm)
 # Chromium + chromium-driver (apt) para Selenium headless
 # cron para o agendamento semanal
@@ -33,7 +33,7 @@ COPY pyproject.toml ./
 COPY mcd_donalds/ ./mcd_donalds/
 RUN pip install --no-cache-dir .
 
-# Crontab (formato de 5 campos, sem coluna de usuario): toda segunda 07:00.
+# Crontab (formato de 5 campos, sem coluna de usuario): todo dia 08:00.
 # O horario segue o TZ do container (definido acima / sobrescrito no entrypoint).
 COPY crontab /app/crontab
 RUN crontab /app/crontab

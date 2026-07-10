@@ -184,9 +184,9 @@ pytest tests/test_transform.py -v
 
 ## Deploy com Docker / Portainer
 
-A imagem roda o pipeline **1x por semana, toda segunda-feira as 07:00**
-(fuso `America/Sao_Paulo`), via `cron` interno. O container fica de pe
-(`restart: unless-stopped`) e o `cron` dispara o job no horario.
+A imagem roda o pipeline **todo dia as 08:00** (fuso `America/Sao_Paulo`),
+via `cron` interno. O container fica de pe (`restart: unless-stopped`) e o
+`cron` dispara o job no horario.
 
 ```bash
 # Build local
@@ -195,27 +195,31 @@ docker build -t mcd-donalds:latest .
 # Subir via compose (ajuste as variaveis no docker-compose.yml antes)
 docker compose up -d
 
-# Validar o deploy sem esperar segunda: executa o pipeline uma vez no start
+# Validar o deploy sem esperar o horario: executa o pipeline uma vez no start
 #   defina RUN_ON_START=true no docker-compose.yml, suba, confira os logs,
 #   depois volte para false.
 docker compose logs -f
 ```
 
-### Senha do banco (fora do git)
+### Segredos (fora do git)
 
-A senha do PostgreSQL **nao** fica no repositorio. Ela e fornecida como
-variavel de ambiente da stack, e o `docker-compose.yml` a repassa ao container
-via `PG_PASSWORD=${PG_PASSWORD}`.
+A senha do PostgreSQL e as credenciais do portal Martin Brower **nao** ficam
+no repositorio. Sao fornecidas como variaveis de ambiente da stack, e o
+`docker-compose.yml` as repassa ao container.
 
 **No Portainer** (Stack a partir do git), em *Environment variables* adicione:
 
 ```
-PG_PASSWORD=sua_senha_real
+PG_PASSWORD=sua_senha_do_banco
+LOGIN_USER=seu_usuario_do_portal
+LOGIN_PASSWORD=sua_senha_do_portal
 ```
 
-A senha fica armazenada na configuracao da stack no Portainer, nunca no git.
+Sem `LOGIN_USER` / `LOGIN_PASSWORD` o container nao consegue logar no portal e a
+extracao falha. Esses valores ficam so na configuracao da stack no Portainer,
+nunca no git.
 
-**Em dev local**, o `docker compose` le `PG_PASSWORD` do arquivo `.env`
+**Em dev local**, o `docker compose` le essas variaveis do arquivo `.env`
 (gitignored) automaticamente.
 
 > Nota: o `config.py` tambem aceita a convencao Docker `_FILE`

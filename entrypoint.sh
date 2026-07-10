@@ -19,9 +19,9 @@ printenv | grep -E '^(PG_[A-Z0-9_]*|BASE_DIR|SITE_URL|LOGIN_URL|LOGIN_USER|LOGIN
     done > /app/container_env.sh
 
 echo "[entrypoint] $(date '+%Y-%m-%d %H:%M:%S %Z') — container pronto."
-echo "[entrypoint] Agendamento: toda segunda-feira 07:00 (${TZ:-UTC})."
+echo "[entrypoint] Agendamento: todo dia 08:00 (${TZ:-UTC})."
 
-# Execucao imediata opcional — util para validar o deploy sem esperar segunda.
+# Execucao imediata opcional — util para validar o deploy sem esperar o horario.
 if [ "${RUN_ON_START:-false}" = "true" ]; then
     echo "[entrypoint] RUN_ON_START=true — executando pipeline agora..."
     . /app/container_env.sh

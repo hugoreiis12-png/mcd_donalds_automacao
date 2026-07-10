@@ -1,0 +1,31 @@
+services:
+  mcd-donalds:
+    build: .
+    image: mcd-donalds:latest
+    container_name: mcd-donalds
+    environment:
+      # ── Fuso (o agendamento de segunda 07:00 segue este TZ) ──
+      - TZ=America/Sao_Paulo
+      # ── Banco (prefixo PG_) — SEM a senha aqui ──
+      - PG_HOST=192.168.0.250
+      - PG_PORT=5432
+      - PG_DBNAME=FABRICA
+      - PG_USER=postgres
+      - PG_SCHEMA=mcd_donalds
+      # Senha: definida como variavel de ambiente da STACK no Portainer
+      # (nao vai para o git). Local dev le do .env automaticamente.
+      - PG_PASSWORD=${PG_PASSWORD:?defina a variavel PG_PASSWORD na stack do Portainer}
+      # ── Pipeline ──
+      - BASE_DIR=/app/dados
+      - HEADLESS=true
+      - CANAL=console
+      # RUN_ON_START=true executa o pipeline uma vez ao subir o container
+      # (valide o deploy e depois volte para false).
+      - RUN_ON_START=false
+    volumes:
+      # Persiste XLSX/CSV/logs entre reinicios e recriacoes do container.
+      - mcd_donalds_dados:/app/dados
+    restart: unless-stopped
+
+volumes:
+  mcd_donalds_dados:

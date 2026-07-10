@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcd-donalds"
+version = "0.1.0"
+description = "Pipeline ETL de reclamacoes McDonald's (portal Martin Brower -> PostgreSQL)"
+requires-python = ">=3.12"
+dependencies = [
+    "selenium>=4.18.0",
+    "webdriver-manager>=4.0.0",
+    "requests>=2.31.0",
+    "pandas>=2.0.0",
+    "psycopg2-binary>=2.9.0",
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    "openpyxl>=3.1.0",
+    "xlrd>=2.0.1",
+]
+
+[project.scripts]
+mcd-donalds = "mcd_donalds.cli:main"
+mcd-donalds-report = "mcd_donalds.report:main"
+
+[tool.setuptools.packages.find]
+include = ["mcd_donalds*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "mypy>=1.8.0",
+]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+disallow_any_unimported = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

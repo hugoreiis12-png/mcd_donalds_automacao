@@ -1,0 +1,12 @@
+# Normaliza fim de linha. Arquivos que rodam no container Linux DEVEM ser LF —
+# CRLF quebra o shell (#!/bin/sh^M: bad interpreter) e o cron.
+* text=auto eol=lf
+
+*.sh        text eol=lf
+entrypoint.sh text eol=lf
+crontab     text eol=lf
+Dockerfile  text eol=lf
+*.py        text eol=lf
+*.sql       text eol=lf
+*.yml       text eol=lf
+*.toml      text eol=lf

@@ -3,6 +3,13 @@
 #
 # Campos: minuto hora dia-do-mes mes dia-da-semana  (* * * = todo dia)
 #
+# PATH: o cron NAO usa o PATH do container — o default dele e apenas
+# "/usr/bin:/bin", que NAO inclui /usr/local/bin, exatamente onde o
+# `pip install .` coloca o console script `mcd-donalds`. Sem esta linha o job
+# morre com "mcd-donalds: not found" (o entrypoint funciona porque roda como
+# PID 1, com o PATH normal da imagem — por isso a falha so aparecia as 08:00).
+PATH=/usr/local/bin:/usr/local/sbin:/usr/sbin:/usr/bin:/sbin:/bin
+#
 # O job carrega o ambiente do container (. /app/container_env.sh) porque o cron
 # NAO herda as variaveis do processo do container — sem isso, PG_HOST/PG_USER e
 # afins nao chegariam ao pipeline. O entrypoint gera esse arquivo no start.

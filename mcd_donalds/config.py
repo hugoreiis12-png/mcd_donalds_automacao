@@ -106,6 +106,12 @@ class Settings(BaseSettings):
     verificar_site: bool = True
     dry_run: bool = False
 
+    # Retencao dos artefatos em dados/ (xlsx, csv, logs). Rodando todo dia, os
+    # diretorios crescem sem teto dentro do volume. Com N > 0, arquivos com mais
+    # de N dias sao apagados APOS uma carga bem-sucedida. 0 = desligado (guarda
+    # tudo) — default conservador para nao mudar o comportamento atual.
+    retencao_dias: int = 0
+
     # resiliencia
     max_tentativas: int = 3
     backoff_s: float = 5.0

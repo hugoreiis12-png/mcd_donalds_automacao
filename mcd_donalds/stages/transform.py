@@ -177,7 +177,7 @@ _COLUNAS_NUMERICAS: set[str] = set(COLUNAS_INT)
 
 
 def _garantir_colunas_canonicas(
-    df: pd.DataFrame, produto: str, ctx: RunContext
+    df: pd.DataFrame, ctx: RunContext
 ) -> pd.DataFrame:
     """Adiciona colunas de COLUNAS_DB ausentes com defaults sensatos.
 
@@ -372,7 +372,7 @@ def _processar_canonico(
         df["tipo_doc"] = df["tipo_doc"].fillna(tipo_doc)
     else:
         df["tipo_doc"] = tipo_doc
-    df = _garantir_colunas_canonicas(df, tipo_doc, ctx)
+    df = _garantir_colunas_canonicas(df, ctx)
     df = normalizar(df)
     df = _ajustar_tipos(df)
     return df

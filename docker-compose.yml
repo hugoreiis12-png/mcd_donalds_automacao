@@ -25,6 +25,12 @@ services:
       - BASE_DIR=/app/dados
       - HEADLESS=true
       - CANAL=console
+      # Retencao dos artefatos em /app/dados (xlsx, csv, logs), em dias.
+      # 0 = desligado (guarda tudo) — comportamento atual, mantido de proposito.
+      # Rodando diariamente o volume cresce sem teto; quando quiser ligar a
+      # limpeza, troque para 30 (apaga o que tem mais de 30 dias, e so APOS uma
+      # carga bem-sucedida).
+      - RETENCAO_DIAS=0
       # RUN_ON_START=true executa o pipeline uma vez ao subir o container
       # (valide o deploy e depois volte para false).
       - RUN_ON_START=false

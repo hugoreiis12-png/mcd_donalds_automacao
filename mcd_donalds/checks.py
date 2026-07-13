@@ -19,19 +19,30 @@ from mcd_donalds.errors import DirectoryError, SiteAccessError
 def verificar(settings: Settings, ctx: RunContext) -> bool:
     """Executa todas as verificacoes pre-voo.
 
+    O check de site e informativo, NAO fatal: o portal fica atras da Imperva,
+    que costuma responder 403 a um GET simples (sem o desafio anti-bot que so
+    um browser real resolve). Derrubar a pipeline por isso seria um falso
+    negativo — quem de fato prova que o portal esta acessivel e o login do
+    Selenium na etapa de extracao. Falha aqui vira warning.
+
     Returns:
-        True se todas passaram.
+        True se as verificacoes fatais passaram.
 
     Raises:
-        SiteAccessError: site inacessivel ou retornou erro.
-        DirectoryError: diretorio nao pode ser criado/acessado.
+        DirectoryError: diretorio nao pode ser criado/acessado (fatal).
     """
     ctx.iniciar_etapa("checks")
     ctx.logger.info("Iniciando verificacoes pre-voo")
 
     try:
         if settings.verificar_site and not settings.dry_run:
-            _verificar_site(settings, ctx)
+            try:
+                _verificar_site(settings, ctx)
+            except SiteAccessError as exc:
+                ctx.logger.warning(
+                    "Check de site nao conclusivo (%s) — seguindo; o login do "
+                    "Selenium e a verificacao real de acesso.", exc,
+                )
 
         _verificar_diretorios(settings, ctx)
 

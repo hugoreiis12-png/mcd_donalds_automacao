@@ -59,7 +59,12 @@ def extrair(settings: Settings, ctx: RunContext) -> list[Path]:
     """Executa a extracao: login -> filtro -> download via API.
 
     Cada tentativa usa uma sessao nova do Chrome. Retorna lista com o caminho
-    do XLS baixado (uma unica posicao), ou vazia se nada foi baixado.
+    do XLS baixado (uma unica posicao).
+
+    Em dry-run nada e baixado: a etapa fica SKIPPED e a lista volta vazia.
+    Esgotadas as tentativas, a etapa fica FAILED e o ultimo erro e propagado —
+    uma falha de extracao nao pode ser confundida com "nao havia o que baixar"
+    na trilha de auditoria.
     """
     ctx.iniciar_etapa("extract")
     settings.xlsx_dir.mkdir(parents=True, exist_ok=True)
@@ -105,12 +110,17 @@ def extrair(settings: Settings, ctx: RunContext) -> list[Path]:
                 except Exception:
                     pass
 
-    ctx.logger.warning(
-        "Download nao concluido apos %d tentativas. Ultimo erro: %s",
-        settings.max_tentativas, ultimo_erro,
+    ctx.finalizar_etapa("extract", StageStatus.FAILED)
+    msg = (
+        f"Download nao concluido apos {settings.max_tentativas} tentativas. "
+        f"Ultimo erro: {ultimo_erro}"
     )
-    ctx.finalizar_etapa("extract", StageStatus.SKIPPED)
-    return []
+    ctx.logger.error(msg)
+    # Preserva o tipo especifico (DownloadTimeoutError, FormFillError, ...)
+    # quando houver: e ele que vai para erro_tipo na auditoria.
+    if isinstance(ultimo_erro, ExtractError):
+        raise ultimo_erro
+    raise ExtractError(msg) from ultimo_erro
 
 
 # ── driver / login ──

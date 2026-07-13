@@ -9,6 +9,7 @@ Uma unica chamada a executar() roda tudo.
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -137,12 +138,41 @@ def executar(settings: Settings, ctx: RunContext) -> int:
         _finalizar(ctx, settings, total_registros)
         return 1
 
+    _limpar_antigos(settings, ctx)
+
     ctx.logger.info("Pipeline concluida com sucesso — %d registros", total_registros)
     _finalizar(ctx, settings, total_registros)
     return 0
 
 
 # ── helpers ──
+
+
+def _limpar_antigos(settings: Settings, ctx: RunContext) -> None:
+    """Apaga artefatos com mais de settings.retencao_dias dias.
+
+    So roda depois de uma carga bem-sucedida, e nunca alcanca os arquivos desta
+    execucao (acabaram de ser escritos, mtime = agora). Falha aqui e nao-fatal:
+    o dado ja esta no banco, disco cheio nao pode invalidar a carga.
+    """
+    if settings.retencao_dias <= 0:
+        return
+
+    limite = time.time() - settings.retencao_dias * 86_400
+    removidos = 0
+    for diretorio in (settings.xlsx_dir, settings.csv_dir, settings.logs_dir):
+        for arquivo in diretorio.glob("*"):
+            try:
+                if arquivo.is_file() and arquivo.stat().st_mtime < limite:
+                    arquivo.unlink()
+                    removidos += 1
+            except OSError as exc:
+                ctx.logger.warning("Nao foi possivel remover %s: %s", arquivo, exc)
+
+    ctx.logger.info(
+        "Retencao (%d dias): %d arquivo(s) antigo(s) removido(s)",
+        settings.retencao_dias, removidos,
+    )
 
 
 def _executar_etapa(
@@ -171,8 +201,9 @@ def _executar_etapa(
         return False
     except Exception as exc:
         ctx.logger.error("Etapa '%s' falhou com erro inesperado: %s", nome, exc)
-        audit.registrar(ctx, settings, nome, "failed",
-                        erro=type(exc)(str(exc)))
+        # Passa a excecao original: reconstruir com type(exc)(str(exc)) estoura
+        # em excecoes cujo __init__ exige mais de um argumento.
+        audit.registrar(ctx, settings, nome, "failed", erro=exc)
         return False
 
 

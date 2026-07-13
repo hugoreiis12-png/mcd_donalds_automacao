@@ -46,7 +46,13 @@ PG_SCHEMA=public
 BASE_DIR=./dados
 HEADLESS=true
 CANAL=console
+RETENCAO_DIAS=0
 ```
+
+`RETENCAO_DIAS` controla a limpeza dos artefatos em `dados/` (xlsx, csv, logs).
+Com `0` (default) nada e apagado. Com `N > 0`, arquivos com mais de N dias sao
+removidos **apos** uma carga bem-sucedida — os artefatos da execucao corrente
+nunca sao alcancados. Rodando diariamente no container, vale definir `30`.
 
 ## Uso
 
@@ -167,11 +173,14 @@ pytest tests/test_report.py -v
 pytest tests/test_transform.py -v
 ```
 
-53 testes unitarios cobrindo:
+63 testes unitarios cobrindo:
 - Hierarquia de erros (17 classes)
 - Modelo de dados (Reclamacao DTO, 28 colunas, normalizacao)
 - Transformacao (XLS -> CSV, normalizacao de datas/inteiros)
 - Relatorios (sumarios por status/motivo, exportacao CSV)
+- Checks (site nao-fatal, diretorio fatal, dry-run nao bate no portal)
+- Extract (dry-run = SKIPPED, tentativas esgotadas = FAILED)
+- Orchestrator (auditoria da excecao original, retencao de artefatos)
 
 ## Tecnologias
 

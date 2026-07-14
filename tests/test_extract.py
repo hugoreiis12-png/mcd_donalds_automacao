@@ -102,6 +102,21 @@ def test_seletor_de_login_cobre_pt_br_e_en_us() -> None:
     assert extract._CSS_CAMPO_SENHA == "input[type='password']"
 
 
+def test_seletores_de_erro_nao_dependem_de_idioma() -> None:
+    """Texto traduzido nao serve de ancora: com a tela em en-US, XPath por
+    texto em portugues deixa a deteccao de erro cega (e contains(text(),'erro')
+    ainda casa qualquer palavra contendo 'erro' — falso positivo)."""
+    palavras_traduziveis = ("erro", "limite", "tente novamente")
+
+    for by, seletor in extract._SELETORES_ERRO:
+        assert by == "css selector", f"seletor nao-CSS: {by} {seletor}"
+        assert "contains(text()" not in seletor
+        for palavra in palavras_traduziveis:
+            assert palavra not in seletor.lower(), (
+                f"seletor acoplado ao idioma: {seletor}"
+            )
+
+
 def test_credencial_ausente_falha_antes_de_abrir_o_chrome(
     settings: Settings, ctx: RunContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:

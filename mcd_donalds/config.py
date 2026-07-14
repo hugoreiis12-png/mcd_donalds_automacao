@@ -118,6 +118,16 @@ class Settings(BaseSettings):
     # tudo) — default conservador para nao mudar o comportamento atual.
     retencao_dias: int = 0
 
+    # Guard de sanidade da carga (CARGA_MIN_RATIO): razao minima aceitavel
+    # entre registros inseridos e removidos no DELETE+COPY. A carga apaga a
+    # janela inteira antes do COPY; se o portal devolver um export truncado,
+    # sem este guard o pipeline apaga um ano de dados bons, insere metade e
+    # reporta sucesso. Ex: 0.9 aborta (com rollback) se inserir menos de 90%
+    # do que apagou. 0.0 = desligado — default de proposito: entra sem mudar
+    # o comportamento em producao; o operador liga na stack depois de ver os
+    # numeros reais (removidos/inseridos) logados em um run bom.
+    carga_min_ratio: float = 0.0
+
     # resiliencia
     max_tentativas: int = 3
     backoff_s: float = 5.0

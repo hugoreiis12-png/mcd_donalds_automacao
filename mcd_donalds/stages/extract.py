@@ -405,16 +405,24 @@ def _aguardar_relatorio_pronto(
     wait.until(EC.element_to_be_clickable(seletor))
 
 
+# Somente seletores CSS estruturais, independentes de idioma. Texto traduzido
+# nao serve de ancora: foi exatamente esse acoplamento ao idioma (aria-label
+# "Usuário *" vs "Username *") que derrubou o login no container quando o
+# Chromium subiu em en-US. Alem disso, XPath por texto como
+# contains(text(),'erro') casa qualquer palavra que contenha "erro" (falso
+# positivo). Classes de componente e ancoras semanticas ([role='alert'])
+# existem em qualquer locale.
 _SELETORES_ERRO: tuple[tuple[str, str], ...] = (
     ("css selector", "div.toast-body"),
     ("css selector", "div.alert.alert-danger"),
     ("css selector", "div.alert.alert-warning"),
     ("css selector", ".modal-body .text-danger"),
     ("css selector", ".swal2-popup"),
-    ("xpath", "//*[contains(text(), 'erro') or contains(text(), 'Erro')]"),
-    ("xpath", "//*[contains(text(), 'limite') or contains(text(), 'Limite')]"),
-    ("xpath", "//*[contains(text(), 'tente novamente')]"),
+    ("css selector", ".invalid-feedback"),
 )
+# Nao adicione [role='alert'] aqui: o portal tem snackbar (snackbar.store.js) e
+# um aviso de SUCESSO com esse role abortaria uma extracao que estava indo bem.
+# Todo seletor desta lista precisa indicar erro, nao apenas "algo apareceu".
 
 
 def _verificar_erro_pagina(driver: WebDriver, ctx: RunContext) -> None:

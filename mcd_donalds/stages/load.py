@@ -125,10 +125,16 @@ def _carregar_csv(
 
     with db.cursor() as cur:
         # 2. DELETE registros do periodo
-        _deletar_por_periodo(cur, settings, df, ctx)
+        removidos = _deletar_por_periodo(cur, settings, df, ctx)
 
         # 3. COPY bulk insert
         inseridos = _copiar_csv(cur, csv_path, settings, ctx)
+
+        # 4. Guard de sanidade: um export truncado nao pode substituir a
+        # janela inteira em silencio. Levantar aqui mantem a transacao
+        # aberta — o LoadError sobe ate carregar(), que faz rollback e a
+        # tabela fica intacta.
+        _validar_volume(removidos, inseridos, settings, ctx, csv_path)
 
     return inseridos
 
@@ -138,14 +144,18 @@ def _deletar_por_periodo(
     settings: Settings,
     df: pd.DataFrame,
     ctx: RunContext,
-) -> None:
-    """Remove registros do mesmo periodo (dt_criacao) — carga idempotente."""
+) -> int:
+    """Remove registros do mesmo periodo (dt_criacao) — carga idempotente.
+
+    Retorna quantos registros foram removidos: o guard de volume precisa
+    comparar esse numero com o de inseridos para detectar export truncado.
+    """
     dt_min = df["dt_criacao"].dropna().min()
     dt_max = df["dt_criacao"].dropna().max()
 
     if pd.isna(dt_min) or pd.isna(dt_max):
         ctx.logger.warning("  Sem dt_criacao valida no CSV — pulando DELETE")
-        return
+        return 0
 
     tabela = sql.Identifier(settings.db.db_schema, settings.db.tabela)
     query = sql.SQL(
@@ -154,8 +164,9 @@ def _deletar_por_periodo(
 
     try:
         cur.execute(query, (dt_min, dt_max))
-        removidos = cur.rowcount
+        removidos: int = cur.rowcount or 0
         ctx.logger.info("  Registros removidos (periodo %s a %s): %d", dt_min, dt_max, removidos)
+        return removidos
     except psycopg2.Error as exc:
         raise QueryError(
             f"Falha ao deletar registros do periodo {dt_min} a {dt_max}: {exc}"
@@ -183,3 +194,37 @@ def _copiar_csv(
         raise LoadError(
             f"Falha ao copiar {csv_path.name} para {tabela}: {exc}"
         ) from exc
+
+
+def _validar_volume(
+    removidos: int,
+    inseridos: int,
+    settings: Settings,
+    ctx: RunContext,
+    csv_path: Path,
+) -> None:
+    """Compara removidos x inseridos e aborta se a carga encolheu demais.
+
+    O DELETE apaga a janela inteira antes do COPY; um export truncado do
+    portal substituiria um ano de dados bons por metade, em silencio. O log
+    sai SEMPRE em INFO, mesmo com o guard desligado: e com esses numeros que
+    o operador escolhe o limiar (CARGA_MIN_RATIO) antes de ligar o guard.
+    """
+    razao = inseridos / removidos if removidos > 0 else float("inf")
+    ctx.logger.info(
+        "  Volume da carga: removidos=%d inseridos=%d razao=%.3f (limiar=%.3f)",
+        removidos, inseridos, razao, settings.carga_min_ratio,
+    )
+
+    # Guard desligado (default) ou tabela vazia/primeira carga: nada a checar.
+    if settings.carga_min_ratio <= 0 or removidos == 0:
+        return
+
+    if inseridos < removidos * settings.carga_min_ratio:
+        raise LoadError(
+            f"Carga de {csv_path.name} abaixo do minimo aceitavel: "
+            f"removidos={removidos}, inseridos={inseridos}, "
+            f"razao={razao:.3f} < limiar={settings.carga_min_ratio:.3f} "
+            f"(CARGA_MIN_RATIO). Possivel export truncado — transacao sera "
+            f"desfeita e a tabela permanece intacta."
+        )

@@ -30,7 +30,15 @@ def tmp_base() -> Generator[str, None, None]:
 @pytest.fixture
 def settings(tmp_base: str) -> Settings:
     # backoff zerado: o teste de retentativa nao pode dormir.
-    return Settings(base_dir=Path(tmp_base), max_tentativas=2, backoff_s=0.0)
+    # Credenciais explicitas: sem elas o Settings cairia no .env da maquina —
+    # o teste passaria aqui e quebraria em qualquer ambiente sem .env.
+    return Settings(
+        base_dir=Path(tmp_base),
+        max_tentativas=2,
+        backoff_s=0.0,
+        login_user="usuario",
+        login_password="senha",
+    )
 
 
 @pytest.fixture
@@ -64,3 +72,20 @@ def test_tentativas_esgotadas_marca_failed_e_propaga(
     assert isinstance(exc_info.value, FormFillError)
     assert ctx.stage_status["extract"] == StageStatus.FAILED
     assert tentativas["n"] == settings.max_tentativas
+
+
+def test_credencial_ausente_falha_antes_de_abrir_o_chrome(
+    settings: Settings, ctx: RunContext, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sem credencial, a causa e nomeada — nao 3 timeouts de login opacos."""
+    settings.login_password = ""
+
+    def _nao_deve_abrir(_settings: Settings) -> object:
+        raise AssertionError("Chrome nao pode ser aberto sem credencial")
+
+    monkeypatch.setattr(extract, "_init_driver", _nao_deve_abrir)
+
+    with pytest.raises(ExtractError, match="LOGIN_PASSWORD"):
+        extrair(settings, ctx)
+
+    assert ctx.stage_status["extract"] == StageStatus.FAILED

@@ -57,6 +57,18 @@ Sessao = tuple[str, dict[str, str], str]
 # Assinaturas de arquivo Excel valido: BIFF/OLE (.xls) e ZIP (.xlsx).
 _XLS_MAGIC: tuple[bytes, ...] = (b"\xd0\xcf\x11\xe0", b"PK\x03\x04")
 
+# Campos do formulario de login. Ancorados no 'type' do input, nao no rotulo:
+# o aria-label e TRADUZIDO ("Usuário *" em pt-BR, "Username *" em en-US), e o
+# 'id' e um UUID regerado a cada render (f_a2a3e0ce-...), inutil como ancora.
+# O type e a unica coisa estavel — e sobrevive a uma mudanca de idioma do portal
+# mesmo que --lang falhe. Os aria-label vem antes so como desempate, caso a tela
+# ganhe outros inputs de texto no futuro.
+_CSS_CAMPO_USER = (
+    "input[aria-label^='Usuário'], input[aria-label^='Username'], "
+    "input[type='text']"
+)
+_CSS_CAMPO_SENHA = "input[type='password']"
+
 
 def extrair(settings: Settings, ctx: RunContext) -> list[Path]:
     """Executa a extracao: login -> filtro -> download via API.
@@ -170,6 +182,15 @@ def _init_driver(settings: Settings) -> WebDriver:
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    # Locale explicito. O portal e internacionalizado: sem locale, o Chromium do
+    # container (Debian slim, sem locale definido) anuncia Accept-Language en-US
+    # e a tela vem em INGLES ("Username *" em vez de "Usuário *"). Em dev local o
+    # Chrome do Windows manda pt-BR e a tela vem em portugues — a mesma extracao
+    # passava aqui e falhava la. Fixar o idioma alinha os dois ambientes.
+    chrome_options.add_argument(f"--lang={settings.chrome_lang}")
+    chrome_options.add_experimental_option(
+        "prefs", {"intl.accept_languages": settings.chrome_lang}
+    )
     if settings.chrome_binary:
         chrome_options.binary_location = settings.chrome_binary
 
@@ -219,11 +240,8 @@ def _fazer_login(driver: WebDriver, settings: Settings, ctx: RunContext) -> None
 
     campo_user = _esperar(
         driver, wait,
-        EC.presence_of_element_located(
-            (By.CSS_SELECTOR, "input[aria-label='Usuário *']")
-        ),
-        "o campo de usuario (pagina de login nao renderizou — portal fora do ar, "
-        "app lento ou desafio anti-bot da Imperva bloqueando o headless?)",
+        EC.presence_of_element_located((By.CSS_SELECTOR, _CSS_CAMPO_USER)),
+        "o campo de usuario (a pagina de login nao renderizou o formulario)",
         t,
     )
     campo_user.clear()
@@ -231,9 +249,7 @@ def _fazer_login(driver: WebDriver, settings: Settings, ctx: RunContext) -> None
 
     campo_pass = _esperar(
         driver, wait,
-        EC.presence_of_element_located(
-            (By.CSS_SELECTOR, "input[aria-label='Senha *']")
-        ),
+        EC.presence_of_element_located((By.CSS_SELECTOR, _CSS_CAMPO_SENHA)),
         "o campo de senha",
         t,
     )
@@ -389,16 +405,24 @@ def _aguardar_relatorio_pronto(
     wait.until(EC.element_to_be_clickable(seletor))
 
 
+# Somente seletores CSS estruturais, independentes de idioma. Texto traduzido
+# nao serve de ancora: foi exatamente esse acoplamento ao idioma (aria-label
+# "Usuário *" vs "Username *") que derrubou o login no container quando o
+# Chromium subiu em en-US. Alem disso, XPath por texto como
+# contains(text(),'erro') casa qualquer palavra que contenha "erro" (falso
+# positivo). Classes de componente e ancoras semanticas ([role='alert'])
+# existem em qualquer locale.
 _SELETORES_ERRO: tuple[tuple[str, str], ...] = (
     ("css selector", "div.toast-body"),
     ("css selector", "div.alert.alert-danger"),
     ("css selector", "div.alert.alert-warning"),
     ("css selector", ".modal-body .text-danger"),
     ("css selector", ".swal2-popup"),
-    ("xpath", "//*[contains(text(), 'erro') or contains(text(), 'Erro')]"),
-    ("xpath", "//*[contains(text(), 'limite') or contains(text(), 'Limite')]"),
-    ("xpath", "//*[contains(text(), 'tente novamente')]"),
+    ("css selector", ".invalid-feedback"),
 )
+# Nao adicione [role='alert'] aqui: o portal tem snackbar (snackbar.store.js) e
+# um aviso de SUCESSO com esse role abortaria uma extracao que estava indo bem.
+# Todo seletor desta lista precisa indicar erro, nao apenas "algo apareceu".
 
 
 def _verificar_erro_pagina(driver: WebDriver, ctx: RunContext) -> None:

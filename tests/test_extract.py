@@ -74,6 +74,49 @@ def test_tentativas_esgotadas_marca_failed_e_propaga(
     assert tentativas["n"] == settings.max_tentativas
 
 
+def test_driver_forca_locale_do_portal(
+    settings: Settings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sem locale, o Chromium do container cai em en-US e o portal traduz a tela."""
+    settings.chromedriver_path = "/usr/bin/chromedriver"
+    capturado: dict[str, object] = {}
+
+    def _fake_chrome(service: object, options: object) -> object:
+        capturado["args"] = options.arguments  # type: ignore[attr-defined]
+        capturado["prefs"] = options.experimental_options["prefs"]  # type: ignore[attr-defined]
+        return object()
+
+    monkeypatch.setattr("selenium.webdriver.Chrome", _fake_chrome)
+    extract._init_driver(settings)
+
+    assert "--lang=pt-BR" in capturado["args"]  # type: ignore[operator]
+    assert capturado["prefs"] == {"intl.accept_languages": "pt-BR"}
+
+
+def test_seletor_de_login_cobre_pt_br_e_en_us() -> None:
+    """O aria-label e traduzido; o seletor nao pode depender de um idioma so."""
+    assert "Usuário" in extract._CSS_CAMPO_USER
+    assert "Username" in extract._CSS_CAMPO_USER
+    # Ancora final, imune a qualquer idioma: o type do input.
+    assert "input[type='text']" in extract._CSS_CAMPO_USER
+    assert extract._CSS_CAMPO_SENHA == "input[type='password']"
+
+
+def test_seletores_de_erro_nao_dependem_de_idioma() -> None:
+    """Texto traduzido nao serve de ancora: com a tela em en-US, XPath por
+    texto em portugues deixa a deteccao de erro cega (e contains(text(),'erro')
+    ainda casa qualquer palavra contendo 'erro' — falso positivo)."""
+    palavras_traduziveis = ("erro", "limite", "tente novamente")
+
+    for by, seletor in extract._SELETORES_ERRO:
+        assert by == "css selector", f"seletor nao-CSS: {by} {seletor}"
+        assert "contains(text()" not in seletor
+        for palavra in palavras_traduziveis:
+            assert palavra not in seletor.lower(), (
+                f"seletor acoplado ao idioma: {seletor}"
+            )
+
+
 def test_credencial_ausente_falha_antes_de_abrir_o_chrome(
     settings: Settings, ctx: RunContext, monkeypatch: pytest.MonkeyPatch
 ) -> None:

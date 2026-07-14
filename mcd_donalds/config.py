@@ -102,6 +102,12 @@ class Settings(BaseSettings):
     chrome_binary: str | None = None
     chromedriver_path: str | None = None
 
+    # Idioma do Chrome (Accept-Language). O portal traduz a interface, e os
+    # rotulos mudam junto: em en-US o campo de login vira "Username *". O
+    # Chromium do container sobe sem locale (Debian slim) e cai em en-US; o
+    # Chrome do Windows manda pt-BR. Fixar aqui alinha os dois ambientes.
+    chrome_lang: str = "pt-BR"
+
     # comportamento
     verificar_site: bool = True
     dry_run: bool = False
@@ -111,6 +117,16 @@ class Settings(BaseSettings):
     # de N dias sao apagados APOS uma carga bem-sucedida. 0 = desligado (guarda
     # tudo) — default conservador para nao mudar o comportamento atual.
     retencao_dias: int = 0
+
+    # Guard de sanidade da carga (CARGA_MIN_RATIO): razao minima aceitavel
+    # entre registros inseridos e removidos no DELETE+COPY. A carga apaga a
+    # janela inteira antes do COPY; se o portal devolver um export truncado,
+    # sem este guard o pipeline apaga um ano de dados bons, insere metade e
+    # reporta sucesso. Ex: 0.9 aborta (com rollback) se inserir menos de 90%
+    # do que apagou. 0.0 = desligado — default de proposito: entra sem mudar
+    # o comportamento em producao; o operador liga na stack depois de ver os
+    # numeros reais (removidos/inseridos) logados em um run bom.
+    carga_min_ratio: float = 0.0
 
     # resiliencia
     max_tentativas: int = 3

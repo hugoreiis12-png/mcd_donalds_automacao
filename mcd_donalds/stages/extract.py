@@ -26,8 +26,10 @@ from __future__ import annotations
 
 import re
 import time
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
+from typing import Literal
 
 import requests
 from selenium import webdriver
@@ -36,6 +38,7 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.remote.webdriver import WebDriver
+from selenium.webdriver.remote.webelement import WebElement
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -74,6 +77,24 @@ def extrair(settings: Settings, ctx: RunContext) -> list[Path]:
         ctx.finalizar_etapa("extract", StageStatus.SKIPPED)
         return []
 
+    # Credencial vazia falha o login de um jeito indistinguivel de um bloqueio
+    # do portal (timeout esperando o icone de usuario). Barrar aqui, antes de
+    # abrir o Chrome, troca 3 tentativas silenciosas por uma causa nomeada.
+    faltando = [
+        nome
+        for nome, valor in (
+            ("LOGIN_USER", settings.login_user),
+            ("LOGIN_PASSWORD", settings.login_password),
+        )
+        if not valor.strip()
+    ]
+    if faltando:
+        ctx.finalizar_etapa("extract", StageStatus.FAILED)
+        raise ExtractError(
+            f"Credenciais do portal ausentes: {', '.join(faltando)} — "
+            "defina no .env (dev) ou nas variaveis da stack (Portainer)."
+        )
+
     ultimo_erro: Exception | None = None
 
     for tentativa in range(settings.max_tentativas):
@@ -102,6 +123,8 @@ def extrair(settings: Settings, ctx: RunContext) -> list[Path]:
                 "Tentativa %d/%d falhou: %s",
                 tentativa + 1, settings.max_tentativas, exc,
             )
+            if driver is not None:
+                _dump_diagnostico(driver, settings, ctx, tentativa + 1)
             continue
         finally:
             if driver:
@@ -158,6 +181,30 @@ def _init_driver(settings: Settings) -> WebDriver:
     return webdriver.Chrome(service=service, options=chrome_options)
 
 
+def _esperar(
+    driver: WebDriver,
+    wait: WebDriverWait[WebDriver],
+    condicao: Callable[[WebDriver], WebElement | Literal[False]],
+    descricao: str,
+    timeout: int,
+) -> WebElement:
+    """Espera uma condicao e, no timeout, diz O QUE nao apareceu e ONDE estava.
+
+    O str() de uma TimeoutException do Selenium e so o stack trace nativo do
+    chromedriver (dezenas de '#0 0x... <unknown>'), sem mensagem: um login que
+    morre no primeiro campo fica indistinguivel de um que morre confirmando a
+    sessao — causas opostas (portal bloqueou vs. credencial recusada). A
+    descricao + URL + titulo da pagina resolvem isso em uma linha de log.
+    """
+    try:
+        return wait.until(condicao)
+    except TimeoutException as exc:
+        raise FormFillError(
+            f"Timeout de {timeout}s aguardando {descricao} "
+            f"[URL: {driver.current_url} | titulo: {driver.title!r}]"
+        ) from exc
+
+
 def _fazer_login(driver: WebDriver, settings: Settings, ctx: RunContext) -> None:
     """Autentica no portal Martin Brower com as credenciais configuradas.
 
@@ -167,40 +214,80 @@ def _fazer_login(driver: WebDriver, settings: Settings, ctx: RunContext) -> None
     """
     ctx.logger.info("Efetuando login...")
     driver.get(settings.login_url)
-    wait: WebDriverWait[WebDriver] = WebDriverWait(driver, settings.postback_timeout)
+    t = settings.postback_timeout
+    wait: WebDriverWait[WebDriver] = WebDriverWait(driver, t)
 
-    try:
-        campo_user = wait.until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "input[aria-label='Usuário *']")
-            )
-        )
-        campo_user.clear()
-        campo_user.send_keys(settings.login_user)
+    campo_user = _esperar(
+        driver, wait,
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "input[aria-label='Usuário *']")
+        ),
+        "o campo de usuario (pagina de login nao renderizou — portal fora do ar, "
+        "app lento ou desafio anti-bot da Imperva bloqueando o headless?)",
+        t,
+    )
+    campo_user.clear()
+    campo_user.send_keys(settings.login_user)
 
-        campo_pass = wait.until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "input[aria-label='Senha *']")
-            )
-        )
-        campo_pass.clear()
-        campo_pass.send_keys(settings.login_password)
+    campo_pass = _esperar(
+        driver, wait,
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "input[aria-label='Senha *']")
+        ),
+        "o campo de senha",
+        t,
+    )
+    campo_pass.clear()
+    campo_pass.send_keys(settings.login_password)
 
-        wait.until(
-            EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, "button[type='submit']")
-            )
-        ).click()
+    botao = _esperar(
+        driver, wait,
+        EC.element_to_be_clickable((By.CSS_SELECTOR, "button[type='submit']")),
+        "o botao 'Entrar' ficar clicavel",
+        t,
+    )
+    botao.click()
 
-        wait.until(
-            EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "button.btn-home i-feather[name='user']")
-            )
-        )
-    except TimeoutException as exc:
-        raise FormFillError(f"Timeout ao efetuar login: {exc}") from exc
+    _esperar(
+        driver, wait,
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "button.btn-home i-feather[name='user']")
+        ),
+        "a confirmacao do login (icone de usuario) — o formulario foi submetido "
+        "mas a sessao nao abriu: credenciais recusadas?",
+        t,
+    )
 
     ctx.logger.info("Login OK")
+
+
+def _dump_diagnostico(
+    driver: WebDriver, settings: Settings, ctx: RunContext, tentativa: int
+) -> None:
+    """Salva screenshot + HTML da pagina no momento da falha, em dados/logs/.
+
+    Sem isso, uma falha de extracao no container e uma caixa-preta: o log so
+    tem o stack trace do chromedriver. Com a pagina em maos da para ver de
+    imediato se a tela e o login, um desafio da Imperva ou um erro do portal.
+    Nunca pode derrubar a extracao — falha aqui vira warning e segue.
+    """
+    try:
+        settings.logs_dir.mkdir(parents=True, exist_ok=True)
+        prefixo = f"falha_{ctx.run_id}_t{tentativa}"
+        ctx.logger.warning(
+            "  Pagina no momento da falha — URL: %s | titulo: %r",
+            driver.current_url, driver.title,
+        )
+
+        png = settings.logs_dir / f"{prefixo}.png"
+        if driver.save_screenshot(str(png)):
+            ctx.logger.warning("  Screenshot: %s", png)
+
+        html = settings.logs_dir / f"{prefixo}.html"
+        html.write_text(driver.page_source, encoding="utf-8")
+        ctx.logger.warning("  HTML: %s", html)
+    except Exception as exc:
+        ctx.logger.warning("  Nao foi possivel salvar o diagnostico: %s", exc)
 
 
 # ── filtro de periodo ──

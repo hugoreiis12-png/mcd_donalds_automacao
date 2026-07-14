@@ -102,6 +102,12 @@ class Settings(BaseSettings):
     chrome_binary: str | None = None
     chromedriver_path: str | None = None
 
+    # Idioma do Chrome (Accept-Language). O portal traduz a interface, e os
+    # rotulos mudam junto: em en-US o campo de login vira "Username *". O
+    # Chromium do container sobe sem locale (Debian slim) e cai em en-US; o
+    # Chrome do Windows manda pt-BR. Fixar aqui alinha os dois ambientes.
+    chrome_lang: str = "pt-BR"
+
     # comportamento
     verificar_site: bool = True
     dry_run: bool = False

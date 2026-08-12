@@ -32,11 +32,20 @@ class StageStatus(str, Enum):
     SKIPPED = "skipped"
 
 
-# ── logger seguro ──
+# ── Logger seguro ──
 
 
 class _SafeStreamHandler(logging.StreamHandler[TextIO]):
-    """StreamHandler que substitui caracteres nao graficaveis no terminal."""
+    """StreamHandler que substitui caracteres nao graficaveis no terminal.
+
+    Formata e escreve por conta propria, sem delegar ao super().emit(): o
+    StreamHandler do Python ja captura o UnicodeEncodeError la dentro e chama
+    handleError(), entao um try/except em volta dele NUNCA dispara — o
+    fallback ficava morto e o traceback ("--- Logging error ---") vazava no
+    meio do log toda vez que uma mensagem trazia um caractere fora do cp1252
+    do terminal Windows (ex: a seta de "XLS → CSV"). Aqui a troca acontece
+    antes da escrita, entao nao ha excecao para ninguem engolir.
+    """
 
     def __init__(self, stream: TextIO) -> None:
         super().__init__(stream)
@@ -44,18 +53,16 @@ class _SafeStreamHandler(logging.StreamHandler[TextIO]):
 
     def emit(self, record: logging.LogRecord) -> None:
         try:
-            super().emit(record)
-        except UnicodeEncodeError:
             msg = self.format(record)
-            enc = self._safe_stream.encoding or "utf-8"
+            enc = getattr(self._safe_stream, "encoding", None) or "utf-8"
             try:
-                self._safe_stream.write(
-                    msg.encode(enc, errors="replace").decode(enc)
-                    + self.terminator
-                )
-                self._safe_stream.flush()
-            except Exception:
-                self.handleError(record)
+                msg.encode(enc)
+            except UnicodeEncodeError:
+                msg = msg.encode(enc, errors="replace").decode(enc)
+            self._safe_stream.write(msg + self.terminator)
+            self.flush()
+        except Exception:
+            self.handleError(record)
 
 
 # ── contexto compartilhado ──

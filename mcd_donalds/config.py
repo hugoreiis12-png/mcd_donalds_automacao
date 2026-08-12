@@ -14,6 +14,9 @@ from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+# Tipos de documento disponiveis no formulario do portal.
+TIPOS_DOC_PADRAO: dict[str, int] = {"QC": 1, "Q1": 2, "QR": 3}
+
 # Convencao Docker "_FILE": pares (env que aponta para o arquivo, campo do DTO).
 # Usado para injetar credenciais sensiveis via secret montado (/run/secrets/...).
 _DB_SECRETS_FILE: tuple[tuple[str, str], ...] = (
@@ -73,8 +76,9 @@ class Settings(BaseSettings):
 
     # URL da pagina de login do portal.
     login_url: str = "https://portal.martinbrower.com.br/mbbr/security-app/login"
-    # URL da pagina do formulario de extracao (filtro de periodo + exportar).
+    # URL da pagina do formulario de extracao (radiobox QC/Q1/QR, filtro, exportar).
     site_url: str = "https://portal.martinbrower.com.br/mbbr/crmfornec/#/home"
+    tipos_doc: dict[str, int] = Field(default_factory=lambda: dict(TIPOS_DOC_PADRAO))
     # Endpoint da API que devolve o XLS (application/octet-stream). O browser
     # so faz login + aplicar o filtro; o download e um POST direto nesta URL,
     # reaproveitando a sessao (cookies Imperva + x-auth-token do localStorage).
@@ -174,3 +178,6 @@ class Settings(BaseSettings):
         """
         db = DBConfig(_env_file=env_file)  # type: ignore[call-arg]
         return cls(_env_file=env_file, db=db)  # type: ignore[call-arg]
+
+
+    
